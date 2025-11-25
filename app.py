@@ -1,6 +1,7 @@
 """
 梅花易數占卜 LINE Bot
 適用於 line-bot-sdk==1.20.0
+環境變數配置，適合部署到 Render
 """
 
 import os
@@ -9,7 +10,7 @@ import random
 from datetime import datetime
 from flask import Flask, request, abort
 
-# LINE Bot SDK (舊版)
+# LINE Bot SDK
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
@@ -18,15 +19,11 @@ from linebot.models import MessageEvent, TextMessage, TextSendMessage
 import google.generativeai as genai
 
 # ==================== 設定區 ====================
-# 請把下面三個值改成你自己的金鑰
-
-# ==================== 設定區 ====================
-import os
-
-# 從環境變數讀取金鑰（Render 部署用）
+# 從環境變數讀取金鑰（需在 Render 設定環境變數）
 LINE_CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN')
 LINE_CHANNEL_SECRET = os.environ.get('LINE_CHANNEL_SECRET')
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
+
 # ==================== 初始化 ====================
 app = Flask(__name__)
 
@@ -75,14 +72,17 @@ HEXAGRAM_TABLE = {
 # ==================== 梅花易數起卦函數 ====================
 
 def num_to_gua(num):
+    """將數字轉換為八卦"""
     remainder = num % 8
     return 8 if remainder == 0 else remainder
 
 def num_to_yao(num):
+    """將數字轉換為動爻"""
     remainder = num % 6
     return 6 if remainder == 0 else remainder
 
 def get_bian_gua(gua_num, yao_position):
+    """根據動爻位置計算變卦"""
     gua_binary = {
         1: [1, 1, 1], 2: [0, 1, 1], 3: [1, 0, 1], 4: [0, 0, 1],
         5: [1, 1, 0], 6: [0, 1, 0], 7: [1, 0, 0], 8: [0, 0, 0],
@@ -97,6 +97,7 @@ def get_bian_gua(gua_num, yao_position):
     return binary_to_gua[tuple(binary)]
 
 def qigua_by_number(num1, num2):
+    """數字起卦法"""
     upper_gua = num_to_gua(num1)
     lower_gua = num_to_gua(num2)
     yao = num_to_yao(num1 + num2)
@@ -114,6 +115,7 @@ def qigua_by_number(num1, num2):
     }
 
 def qigua_by_time():
+    """時間起卦法"""
     now = datetime.now()
     hour_num = ((now.hour + 1) // 2) % 12
     if hour_num == 0:
@@ -140,6 +142,7 @@ def qigua_by_time():
     }
 
 def qigua_random():
+    """隨機起卦法"""
     num1 = random.randint(1, 999)
     num2 = random.randint(1, 999)
     result = qigua_by_number(num1, num2)
@@ -147,6 +150,7 @@ def qigua_random():
     return result
 
 def format_gua_result(gua_data):
+    """格式化卦象結果"""
     upper = BAGUA_NUM[gua_data['upper']]
     lower = BAGUA_NUM[gua_data['lower']]
     bian_upper = BAGUA_NUM[gua_data['bian_upper']]
@@ -196,6 +200,7 @@ MEIHUA_SYSTEM_PROMPT = """你是一位精通梅花易數的資深易學大師，
 """
 
 def get_ai_interpretation(ben_gua, bian_gua, yao, user_question):
+    """使用 AI 解讀卦象"""
     prompt = f"""{MEIHUA_SYSTEM_PROMPT}
 
 使用者的問題：{user_question}
@@ -222,6 +227,10 @@ def get_ai_interpretation(ben_gua, bian_gua, yao, user_question):
 
 # ==================== LINE Bot 路由 ====================
 
+@app.route("/")
+def home():
+    return "🔮 梅花易數占卜 LINE Bot 正在運行中"
+
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers['X-Line-Signature']
@@ -237,7 +246,7 @@ def callback():
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     try:
-        print(f"收到訊息: {event.message.text}")  # 除錯訊息
+        print(f"收到訊息: {event.message.text}")
         user_message = event.message.text.strip()
         
         # 指令處理
@@ -267,21 +276,61 @@ def handle_message(event):
             else:
                 reply = "🔮 梅花易數占卜機器人\n\n" + get_help_message()
         
-        print(f"準備回覆: {reply[:50]}...")  # 除錯訊息
+        print(f"準備回覆: {reply[:50]}...")
         
         line_bot_api.reply_message(
             event.reply_token,
             TextSendMessage(text=reply)
         )
         
-        print("訊息已送出")  # 除錯訊息
+        print("訊息已送出")
         
     except Exception as e:
-        print(f"❌ 錯誤發生: {e}")  # 顯示錯誤
+        print(f"❌ 錯誤發生: {e}")
         import traceback
-        traceback.print_exc()  # 顯示完整錯誤堆疊
+        traceback.print_exc()
+
+def process_divination(question, method='random'):
+    """處理占卜請求"""
+    if method == 'time':
+        gua_data = qigua_by_time()
+        method_info = f"⏰ 起卦時間：{gua_data.get('time_info', '當前時間')}"
+    else:
+        gua_data = qigua_random()
+        nums = gua_data.get('random_nums', (0, 0))
+        method_info = f"🎲 隨機數字：{nums[0]}, {nums[1]}"
+    
+    gua_result, ben_gua, bian_gua, yao = format_gua_result(gua_data)
+    ai_interpretation = get_ai_interpretation(ben_gua, bian_gua, yao, question)
+    
+    reply = f"📝 您的問題：{question}\n{method_info}\n{gua_result}\n🌟【易學大師解讀】\n{ai_interpretation}"
+    return reply
+
+def process_number_divination(message):
+    """處理數字占卜"""
+    parts = message.replace('數字占卜', '').strip().split()
+    
+    if len(parts) < 2:
+        return "⚠️ 數字占卜格式：\n數字占卜 [數字1] [數字2]\n\n例如：數字占卜 168 888"
+    
+    try:
+        num1 = int(parts[0])
+        num2 = int(parts[1])
+        question = ' '.join(parts[2:]) if len(parts) > 2 else "請解讀此卦象"
+        
+        gua_data = qigua_by_number(num1, num2)
+        method_info = f"🔢 您的數字：{num1}, {num2}"
+        
+        gua_result, ben_gua, bian_gua, yao = format_gua_result(gua_data)
+        ai_interpretation = get_ai_interpretation(ben_gua, bian_gua, yao, question)
+        
+        return f"📝 您的問題：{question}\n{method_info}\n{gua_result}\n🌟【易學大師解讀】\n{ai_interpretation}"
+        
+    except ValueError:
+        return "⚠️ 請輸入有效的數字。\n\n格式：數字占卜 [數字1] [數字2]"
 
 def get_help_message():
+    """取得使用說明"""
     return """📖 【梅花易數占卜使用說明】
 
 🎯 快速占卜：
@@ -307,19 +356,9 @@ def get_help_message():
 # ==================== 主程式 ====================
 
 if __name__ == "__main__":
+    port = int(os.environ.get('PORT', 5000))
     print("=" * 50)
     print("🔮 梅花易數占卜 LINE Bot 啟動中...")
+    print(f"Port: {port}")
     print("=" * 50)
-    app.run(host='0.0.0.0', port=5000, debug=True)
-    # 測試 Gemini API
-import google.generativeai as genai
-
-genai.configure(api_key="你的_GEMINI_API_KEY")
-model = genai.GenerativeModel('models/gemini-2.0-flash')
-
-try:
-    response = model.generate_content("測試")
-    print("✅ Gemini API 正常:", response.text[:50])
-except Exception as e:
-
-    print("❌ Gemini API 錯誤:", e)
+    app.run(host='0.0.0.0', port=port, debug=False)
