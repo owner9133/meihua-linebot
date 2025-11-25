@@ -24,9 +24,9 @@ import google.generativeai as genai
 import os
 
 # 從環境變數讀取金鑰（Render 部署用）
-LINE_CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN', 'zDjQmnhXLFa0UHnb98mNFaLh5w9DsT1l/M7UqAsgGpzlUt50pEBW9BXnba3q5O5YKB8xebltL0zYkpn/InWpJcFRv3dDerVRS4EX0MWckRrnju386CTri4eLUA9LpbtTTt8KoME50XQZ5BTnPd2DyAdB04t89/1O/w1cDnyilFU=')
-LINE_CHANNEL_SECRET = os.environ.get('LINE_CHANNEL_SECRET', '00742a3a9ef29b6e95424d7f0123ae3f')
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', 'AIzaSyC10-5LY44SoZ-yWKRrKg4gFgRjTT8gRhs')
+LINE_CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN')
+LINE_CHANNEL_SECRET = os.environ.get('LINE_CHANNEL_SECRET')
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 # ==================== 初始化 ====================
 app = Flask(__name__)
 
@@ -321,4 +321,5 @@ try:
     response = model.generate_content("測試")
     print("✅ Gemini API 正常:", response.text[:50])
 except Exception as e:
+
     print("❌ Gemini API 錯誤:", e)
